@@ -1,0 +1,22 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "appServicePlanInstanceCount": {
+            "value": 1
+        },
+        "storageAccountSku" : {
+            "value": "Standard_LRS"
+        },
+        "appServiceSku":{
+            "value": {
+                "name": "F1",
+                "tier": "Free"
+            }
+        },
+        "eventHubSku" : {
+            "value": "Standard"
+        }
+    }
+
+}

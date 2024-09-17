@@ -1,0 +1,106 @@
+name: Build-Pipeline$(Rev:.r)
+trigger:
+  batch: true
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - src
+pool:
+  vmImage: 'windows-latest'
+
+
+stages:
+  - stage: 'Build'
+    displayName: 'Build applications'
+    jobs:
+      - job: 'Build'
+        displayName: 'Build Job'
+        pool:
+          vmImage: 'ubuntu-20.04'
+
+        variables:
+          solution: '**/*.sln'
+          buildPlatform: 'Any CPU'
+          buildConfiguration: 'Release'
+          dotnetSdkVersion: '8.x'
+
+        steps:
+          - task: UseDotNet@2
+            displayName: 'Use .NET SDK $(dotnetSdkVersion)'
+            inputs:
+              version: '$(dotnetSdkVersion)'
+          - task: DotNetCoreCLI@2
+            displayName: 'Restore dependencies'
+            inputs:
+              command: 'restore'
+              projects: '**/*.csproj'
+          - task: DotNetCoreCLI@2
+            displayName: 'Build the project'
+            inputs:
+              command: 'build'
+              arguments: '--no-restore --configuration $(buildConfiguration)'
+              projects: '**/*.csproj'
+          - task: DotNetCoreCLI@2
+            displayName: 'Install .NET tools from local manifest'
+            inputs:
+              command: custom
+              custom: tool
+              arguments: 'restore'
+          - task: DotNetCoreCLI@2
+            displayName: 'Run unit tests - $(buildConfiguration)'
+            inputs:
+              command: 'test'
+              arguments: '--no-build --configuration $(buildConfiguration) /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:CoverletOutput=$(Build.SourcesDirectory)/TestResults/Coverage/'
+              publishTestResults: true
+              projects: '**/*.Tests.csproj'
+          - task: DotNetCoreCLI@2
+            displayName: 'Create code coverage report'
+            inputs:
+              command: custom
+              custom: tool
+              arguments: 'run reportgenerator -reports:$(Build.SourcesDirectory)/**/coverage.cobertura.xml -targetdir:$(Build.SourcesDirectory)/CodeCoverage -reporttypes:HtmlInline_AzurePipelines'
+          - task: PublishCodeCoverageResults@1
+            displayName: 'Publish Code Coverage report'
+            inputs:
+              codeCoverageTool: 'cobertura'
+              summaryFileLocation: '$(Build.SourcesDirectory)/**/coverage.cobertura.xml'
+          - task: DotNetCoreCLI@2
+            displayName: 'publish the project'
+            inputs:
+              command: 'publish'
+              arguments: '--no-build --configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/Release'
+              projects: '**/*.csproj'
+              publishWebProjects: false
+              zipAfterPublish: true      
+          - task: PublishBuildArtifacts@1
+            displayName: 'publish artifacts'
+            inputs:
+              PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+              ArtifactName: 'drop'
+            condition: succeeded()
+
+  - stage: 'Deploy'
+    displayName: 'Deploy the web application'
+    dependsOn: Build
+    jobs:
+      - deployment: Deploy
+        pool:
+          vmImage: 'ubuntu-20.04'
+        environment: dev
+        variables:
+        - group: Release
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: drop
+                - task: AzureWebApp@1
+                  displayName: 'Azure App Service Deploy: website'
+                  inputs:
+                    azureSubscription: '$(azureConnectionDev)'
+                    appName: '$(WebAppName)'
+                    package: '$(Pipeline.Workspace)/drop/Release/PropertyManagement.Portal.UI.zip'
+
