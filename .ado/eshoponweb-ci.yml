@@ -1,6 +1,6 @@
 #NAME THE PIPELINE SAME AS FILE (WITHOUT ".yml")
-# trigger:
-# - main
+trigger:
+- main
 
 resources:
   repositories:
@@ -26,20 +26,20 @@ stages:
       displayName: Build
       inputs:
         command: 'build'
-        projects: '**/*.sln'
+        projects: '**/*.sln --no-restore'
     
     - task: DotNetCoreCLI@2
       displayName: Test
       inputs:
         command: 'test'
-        projects: 'tests/UnitTests/*.csproj'
+        projects: 'tests/UnitTests/*.csproj --no-build --no-restore'
     
     - task: DotNetCoreCLI@2
       displayName: Publish
       inputs:
         command: 'publish'
         publishWebProjects: true
-        arguments: '-o $(Build.ArtifactStagingDirectory)'
+        arguments: '-o $(Build.ArtifactStagingDirectory) --no-build --no-restore'
     
     - task: PublishPipelineArtifact@1
       displayName: Publish Artifacts ADO - Website
